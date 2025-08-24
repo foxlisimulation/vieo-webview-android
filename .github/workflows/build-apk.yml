@@ -25,7 +25,7 @@ jobs:
       uses: android-actions/setup-android@v3
       
     - name: Cache Gradle packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           ~/.gradle/caches
@@ -44,20 +44,20 @@ jobs:
       run: ./gradlew assembleRelease
       
     - name: Upload Debug APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: vieo-webview-debug
         path: app/build/outputs/apk/debug/app-debug.apk
         
     - name: Upload Release APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: vieo-webview-release
         path: app/build/outputs/apk/release/app-release-unsigned.apk
         
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: Vieo WebView v1.0.${{ github.run_number }}
