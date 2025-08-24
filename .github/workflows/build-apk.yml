@@ -34,30 +34,32 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
           
-    - name: Fix gradlew line endings and permissions
+    - name: Create Gradle Wrapper if missing
       run: |
-        echo "Checking for gradlew file..."
-        if [ -f "gradlew" ]; then
-          echo "Found gradlew, fixing line endings..."
-          dos2unix gradlew 2>/dev/null || sed -i 's/\r$//' gradlew
-          chmod +x gradlew
-          echo "gradlew permissions set"
-        else
-          echo "gradlew not found, creating minimal wrapper..."
+        echo "Setting up Gradle wrapper..."
+        if [ ! -f "gradlew" ]; then
+          echo "Creating gradlew script..."
           cat > gradlew << 'EOF'
 #!/bin/sh
-exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
+GRADLE_APP_NAME="Gradle"
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
+GRADLE_OPTS="${GRADLE_OPTS:--Xmx64m -Xms64m}"
+APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+exec java $GRADLE_OPTS -cp "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
 EOF
+          chmod +x gradlew
+        else
+          echo "gradlew exists, fixing line endings..."
+          sed -i 's/\r$//' gradlew
           chmod +x gradlew
         fi
         
-    - name: Verify Gradle wrapper
+    - name: Setup Gradle wrapper properties
       run: |
-        echo "Checking Gradle wrapper files..."
-        ls -la gradle/wrapper/ || echo "Gradle wrapper directory not found"
+        echo "Setting up Gradle wrapper properties..."
+        mkdir -p gradle/wrapper
         if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
-          echo "Creating gradle-wrapper.properties..."
-          mkdir -p gradle/wrapper
           cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
@@ -66,47 +68,41 @@ zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 EOF
         fi
-      
-    - name: Setup Gradle Wrapper
+        
+    - name: Setup Gradle Build Action
       uses: gradle/gradle-build-action@v2
       with:
         gradle-version: 8.2
         
+    - name: Validate Gradle setup
+      run: |
+        echo "Validating Gradle setup..."
+        ls -la gradlew
+        ls -la gradle/wrapper/
+        echo "Gradle version check..."
+        ./gradlew --version || gradle --version
+        
     - name: Build Debug APK
       run: |
-        echo "Starting Debug APK build..."
-        if [ -f "gradlew" ]; then
-          echo "Using gradlew..."
-          ./gradlew assembleDebug --stacktrace --info
-        else
-          echo "Using gradle command..."
-          gradle assembleDebug --stacktrace --info
-        fi
-      
+        echo "Building Debug APK..."
+        ./gradlew assembleDebug --stacktrace
+        
     - name: Build Release APK
       run: |
-        echo "Starting Release APK build..."
-        if [ -f "gradlew" ]; then
-          echo "Using gradlew..."
-          ./gradlew assembleRelease --stacktrace --info
-        else
-          echo "Using gradle command..."
-          gradle assembleRelease --stacktrace --info
-        fi
-      
-    - name: List build outputs
+        echo "Building Release APK..."
+        ./gradlew assembleRelease --stacktrace
+        
+    - name: Verify APK files
       run: |
-        echo "Listing build outputs..."
-        find . -name "*.apk" -type f || echo "No APK files found"
-        ls -la app/build/outputs/apk/debug/ || echo "Debug APK directory not found"
-        ls -la app/build/outputs/apk/release/ || echo "Release APK directory not found"
-      
+        echo "Checking for generated APK files..."
+        find . -name "*.apk" -type f -exec ls -la {} \;
+        
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: vieo-webview-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-        if-no-files-found: warn
+        if-no-files-found: error
         
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
@@ -122,27 +118,25 @@ EOF
         tag_name: v1.0.${{ github.run_number }}
         name: Vieo WebView v1.0.${{ github.run_number }}
         body: |
-          ## Vieo WebView Android App
+          ## 📱 Vieo WebView Android App
           
-          ### 📱 支持设备
+          ### 支持设备
           - Android 手机和平板 (Android 5.0+)
           - Android TV
           
-          ### ✨ 功能特性
+          ### 功能特性
           - 访问 https://vieo.qzz.io/
           - 手机版：下拉刷新、进度条、返回键支持
           - TV版：遥控器导航、焦点高亮、大字体显示
           
-          ### 📦 下载文件
-          - `app-debug.apk` - 调试版本（推荐用于测试）
-          - `app-release-unsigned.apk` - 发布版本（需要签名）
+          ### 下载文件
+          - app-debug.apk - 调试版本（推荐用于测试）
+          - app-release-unsigned.apk - 发布版本（需要签名）
           
-          ### 📺 Android TV 安装方法
+          ### Android TV 安装方法
           1. 启用开发者选项和USB调试
-          2. 使用ADB安装：`adb install app-debug.apk`
+          2. 使用ADB安装：adb install app-debug.apk
           3. 或通过文件管理器直接安装
-          
-          构建时间: ${{ github.event.head_commit.timestamp }}
         files: |
           app/build/outputs/apk/debug/app-debug.apk
           app/build/outputs/apk/release/app-release-unsigned.apk
