@@ -34,26 +34,86 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
           
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Fix gradlew line endings and permissions
+      run: |
+        echo "Checking for gradlew file..."
+        if [ -f "gradlew" ]; then
+          echo "Found gradlew, fixing line endings..."
+          dos2unix gradlew 2>/dev/null || sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+          echo "gradlew permissions set"
+        else
+          echo "gradlew not found, creating minimal wrapper..."
+          cat > gradlew << 'EOF'
+#!/bin/sh
+exec java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain "$@"
+EOF
+          chmod +x gradlew
+        fi
+        
+    - name: Verify Gradle wrapper
+      run: |
+        echo "Checking Gradle wrapper files..."
+        ls -la gradle/wrapper/ || echo "Gradle wrapper directory not found"
+        if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+          echo "Creating gradle-wrapper.properties..."
+          mkdir -p gradle/wrapper
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+        fi
       
+    - name: Setup Gradle Wrapper
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.2
+        
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: |
+        echo "Starting Debug APK build..."
+        if [ -f "gradlew" ]; then
+          echo "Using gradlew..."
+          ./gradlew assembleDebug --stacktrace --info
+        else
+          echo "Using gradle command..."
+          gradle assembleDebug --stacktrace --info
+        fi
       
     - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: |
+        echo "Starting Release APK build..."
+        if [ -f "gradlew" ]; then
+          echo "Using gradlew..."
+          ./gradlew assembleRelease --stacktrace --info
+        else
+          echo "Using gradle command..."
+          gradle assembleRelease --stacktrace --info
+        fi
+      
+    - name: List build outputs
+      run: |
+        echo "Listing build outputs..."
+        find . -name "*.apk" -type f || echo "No APK files found"
+        ls -la app/build/outputs/apk/debug/ || echo "Debug APK directory not found"
+        ls -la app/build/outputs/apk/release/ || echo "Release APK directory not found"
       
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: vieo-webview-debug
         path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: warn
         
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
         name: vieo-webview-release
         path: app/build/outputs/apk/release/app-release-unsigned.apk
+        if-no-files-found: warn
         
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -81,6 +141,8 @@ jobs:
           1. 启用开发者选项和USB调试
           2. 使用ADB安装：`adb install app-debug.apk`
           3. 或通过文件管理器直接安装
+          
+          构建时间: ${{ github.event.head_commit.timestamp }}
         files: |
           app/build/outputs/apk/debug/app-debug.apk
           app/build/outputs/apk/release/app-release-unsigned.apk
