@@ -1,0 +1,3 @@
+# This is a placeholder for the gradle wrapper jar file.
+# In a real project, this would be a binary file downloaded from Gradle.
+# For compilation, we'll try to use system gradle or download it automatically.
