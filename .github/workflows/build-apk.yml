@@ -7,6 +7,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -69,9 +73,13 @@ jobs:
         
         chmod +x gradlew
         
+        echo "Creating debug keystore..."
+        keytool -genkey -v -keystore app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        
         echo "Gradle wrapper setup complete!"
         ls -la gradlew
         ls -la gradle/wrapper/
+        ls -la app/debug.keystore
         
     - name: Validate Gradle
       run: |
@@ -110,6 +118,7 @@ jobs:
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v2
+      continue-on-error: true
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: Vieo WebView v1.0.${{ github.run_number }}
