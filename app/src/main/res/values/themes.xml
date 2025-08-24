@@ -12,7 +12,7 @@
     <style name="Theme.VieoWebView" parent="Base.Theme.VieoWebView" />
     
     <!-- TV Theme -->
-    <style name="Theme.Leanback" parent="@style/Theme.Leanback">
+    <style name="Theme.Leanback" parent="Theme.Leanback.Browse">
         <item name="android:colorPrimary">@color/primary_color</item>
         <item name="android:windowBackground">@color/tv_background</item>
         <item name="android:windowNoTitle">true</item>
