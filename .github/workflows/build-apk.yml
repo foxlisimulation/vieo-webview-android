@@ -1,0 +1,142 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Cache Gradle packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+          
+    - name: Setup Gradle Wrapper
+      run: |
+        echo "Setting up Gradle wrapper..."
+        mkdir -p gradle/wrapper
+        
+        echo "Downloading gradle-wrapper.jar..."
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar
+        
+        echo "Creating gradle-wrapper.properties..."
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        
+        echo "Creating gradlew script..."
+        cat > gradlew << 'EOF'
+        #!/bin/sh
+        APP_HOME="$(cd "$(dirname "$0")" && pwd)"
+        CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+        DEFAULT_JVM_OPTS="-Xmx64m -Xms64m"
+        
+        if [ -n "$JAVA_HOME" ] ; then
+            JAVACMD="$JAVA_HOME/bin/java"
+        else
+            JAVACMD="java"
+        fi
+        
+        exec "$JAVACMD" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS -cp "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        EOF
+        
+        chmod +x gradlew
+        
+        echo "Gradle wrapper setup complete!"
+        ls -la gradlew
+        ls -la gradle/wrapper/
+        
+    - name: Validate Gradle
+      run: |
+        echo "Validating Gradle setup..."
+        ./gradlew --version
+        
+    - name: Build Debug APK
+      run: |
+        echo "Building Debug APK..."
+        ./gradlew assembleDebug --stacktrace
+        
+    - name: Build Release APK
+      run: |
+        echo "Building Release APK..."
+        ./gradlew assembleRelease --stacktrace
+        
+    - name: List APK files
+      run: |
+        echo "Generated APK files:"
+        find . -name "*.apk" -type f -exec ls -la {} \;
+        
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: vieo-webview-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        if-no-files-found: error
+        
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: vieo-webview-release
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        if-no-files-found: warn
+        
+    - name: Create Release
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: Vieo WebView v1.0.${{ github.run_number }}
+        body: |
+          ## Vieo WebView Android App
+          
+          ### 支持设备
+          - Android 手机和平板 (Android 5.0+)
+          - Android TV
+          
+          ### 功能特性
+          - 访问 https://vieo.qzz.io/
+          - 手机版：下拉刷新、进度条、返回键支持
+          - TV版：遥控器导航、焦点高亮、大字体显示
+          
+          ### 下载文件
+          - app-debug.apk - 调试版本（推荐用于测试）
+          - app-release-unsigned.apk - 发布版本（需要签名）
+          
+          ### Android TV 安装方法
+          1. 启用开发者选项和USB调试
+          2. 使用ADB安装：adb install app-debug.apk
+          3. 或通过文件管理器直接安装
+        files: |
+          app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/release/app-release-unsigned.apk
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
